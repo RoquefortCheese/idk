@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html>
+  <body>
+    <script>
+      async function main()
+      {
+	  const display = document.createElement("canvas");
+	  display.width = window.innerWidth - 32;
+	  display.height = display.width * 2 / 3;
+	  const context = display.getContext("2d");
+	  document.body.appendChild(display);
+
+	  const mapsize = [96, 64];
+	  const scale = display.width / mapsize[0];
+
+	  let keys = new Set();
+	  let presses = new Set();
+          document.addEventListener("keydown", function(event) {keys.add(event.key); presses.add(event.key);});
+          document.addEventListener("keyup", function(event) {keys.delete(event.key);});
+
+	  const font = new FontFace("font", "url('UbuntuMono-R.ttf')");
+	  await font.load();
+	  document.fonts.add(font);
+	  context.font = (display.height / 16) + "px font";
+	  context.textBaseline = "top";
+	  context.textAlign = "left";
+	  
+	  let player;
+	  let pangle;
+	  let circles;
+	  let still;
+	  let chasers;
+	  let score;
+	  let treasure;
+
+	  let bgcolor = "black";
+	  let circlecolor;
+	  let playercolor;
+	  let chasercolor;
+	  let textcolor = "white";
+	  let knockback;
+	  let playerspeed;
+	  let chaserspeed;
+	  let repulsion;
+	  let friction;
+	  let treasurespeed;
+	  let circleno;
+	  let chaserno;
+	  
+	  class Thing
+	  {
+	      constructor(point)
+	      {
+		  this.point = point;
+		  this.vel = [0, 0];
+		  this.alive = true;
+	      }
+	      physics()
+	      {
+		  for (let i = 0; i < 16; i++)
+		  {
+		      const projection = [this.point[0] + this.vel[0] / 16, this.point[1] + this.vel[1] / 16];
+		      let validmove = true;
+		      if (projection[0] < 0 || projection[0] >= mapsize[0])
+		      {
+			  validmove = false;
+			  this.vel[0] *= -knockback;
+		      }
+		      if (projection[1] < 0 || projection[1] >= mapsize[1])
+		      {
+			  validmove = false;
+			  this.vel[1] *= -knockback;
+		      }
+		      for (const circle of circles)
+		      {
+			  if (((circle.point[0] - projection[0]) ** 2 + (circle.point[1] - projection[1]) ** 2) ** 0.5 < circle.radius)
+			  {
+			      validmove = false;
+			      this.vel[0] *= -knockback;
+			      this.vel[1] *= -knockback;
+			      if (this == player)
+			      {
+				  pangle += Math.PI;
+			      }
+			  }
+		      }
+		      for (const chaser of chasers)
+		      {
+			  if (((chaser.point[0] - projection[0]) ** 2 + (chaser.point[1] - projection[1]) ** 2) ** 0.5 < chaser.radius)
+			  {
+			      this.alive = false;
+			  }
+		      }
+		      if (this == player)
+		      {
+			  if (((treasure.point[0] - projection[0]) ** 2 + (treasure.point[1] - projection[1]) ** 2) ** 0.5 < treasure.radius)
+			  {
+			      score++;
+			      treasure.point = [Math.random() * mapsize[0], Math.random() * mapsize[1]];
+			      treasure.vel = [0, 0];
+			  }
+		      }
+		      if (validmove)
+		      {
+			  this.point = projection;
+		      }
+		  }
+		  this.vel[0] *= 1 - 2 ** -6;
+		  this.vel[1] *= 1 - 2 ** -6;
+	      }
+	  }
+
+	  function gen()
+	  {
+	      player = new Thing([48, 32]);
+	      pangle = 0;
+	      still = document.createElement("canvas");
+	      still.width = display.width;
+	      still.height = display.height;
+	      const stilltext = still.getContext("2d");
+	      
+	      circles = [];
+	      for (let i = 0; i < circleno; i++)
+	      {
+		  const circle = new Thing([Math.random() * mapsize[0], Math.random() * mapsize[1]]);
+		  circle.radius = Math.random() * 6;
+		  circles[i] = circle;
+	      }
+	      
+	      stilltext.strokeStyle = circlecolor;
+	      stilltext.fillStyle = circlecolor;
+	      for (const circle of circles)
+	      {
+		  stilltext.beginPath();
+		  stilltext.arc(...scalepoint(circle.point), circle.radius * scale, 1, Math.PI * 3);
+		  stilltext.stroke();
+		  stilltext.fill();
+	      }
+
+	      chasers = [];
+	      for (let i = 0; i < chaserno; i++)
+	      {
+		  const chaser = new Thing([Math.random() * mapsize[0], Math.random() * mapsize[1]]);
+		  chaser.radius = 1;
+		  chasers[i] = chaser;
+	      }
+	      treasure = new Thing([Math.random() * mapsize[0], Math.random() * mapsize[1]]);
+	      treasure.radius = 1;
+	      score = 0;
+	  }
+	  
+	  function scalepoint(point)
+	  {
+	      return [point[0] * scale, point[1] * scale];
+	  }
+	      
+	  function show()
+	  {
+	      context.fillStyle = bgcolor;
+	      context.fillRect(0, 0, display.width, display.height);
+	      context.strokeStyle = playercolor;
+	      for (const angle of [pangle + Math.PI * 7 / 8, pangle + Math.PI * 9 / 8])
+	      {
+		  context.beginPath();
+		  context.moveTo(...scalepoint(player.point));
+		  context.lineTo(...scalepoint([player.point[0] + Math.cos(angle), player.point[1] + Math.sin(angle)]));
+		  context.stroke();
+	      }
+	      context.strokeStyle = chasercolor;
+	      context.fillStyle = chasercolor;
+	      for (const chaser of chasers)
+	      {
+		  context.beginPath();
+		  context.arc(...scalepoint(chaser.point), chaser.radius * scale, 1, Math.PI * 3);
+		  context.stroke();
+		  context.fill();
+	      }
+	      context.fillStyle = "rgb(" + (Math.random() * 256) + ", " + (Math.random() * 256) + ", " + (Math.random() * 256) + ")";
+	      context.beginPath();
+	      context.arc(...scalepoint(treasure.point), treasure.radius * scale, 1, Math.PI * 3);
+	      context.fill();
+	      context.drawImage(still, 0, 0);
+	      context.fillStyle = textcolor;
+	      context.fillText(score, display.width / 64, display.height / 64);
+	  }
+
+	  function keydown()
+	  {
+	      return new Promise((resolve) => {document.addEventListener("keydown", function handler(event) {document.removeEventListener("keydown", handler); resolve(event.key);});});
+	  }
+
+	  async function start()
+	  {
+	      context.fillStyle = bgcolor;
+	      context.fillRect(0, 0, display.width, display.height);
+	      context.fillStyle = textcolor;
+	      let lines = [];
+	      lines.push("Welcome to <name>!");
+	      lines.push("Press [a] for default settings.");
+	      lines.push("Press anything else for chaos!");
+	      for (let i = 0; i < lines.length; i++)
+	      {
+		  context.fillText(lines[i], display.width / 64, display.width / 64 + display.height / 16 * i);
+	      }
+	      if (await keydown() == "a")
+	      {
+		  bgcolor = "black";
+		  playercolor = "white";
+		  circlecolor = "#00ffbf";
+		  chasercolor = "#ffbf00";
+		  textcolor = "white";
+		  knockback = 1;
+		  playerspeed = 1 / 96;
+		  chaserspeed = 1 / 96;
+		  repulsion = 1 / 512;
+		  friction = 1 - 2 ** -6;
+		  treasurespeed = 1 / 256;
+		  circleno = 16;
+		  chaserno = 8;
+	      }
+	      else
+	      {
+		  const colors = [];
+		  for (let i = 0; i < 3; i++)
+		  {
+		      colors[i] = [];
+		      for (let j = 0; j < 256; j += 16)
+		      {
+			  colors[i].push(j);
+		      }
+		      colors[i] = shuffle(colors[i]);
+		  }
+		  bgcolor = "rgb(" + colors[0][0] + ", " + colors[1][0] + ", " + colors[2][0] + ")";
+		  playercolor = "rgb(" + colors[0][1] + ", " + colors[1][1] + ", " + colors[2][1] + ")";
+		  circlecolor = "rgb(" + colors[0][2] + ", " + colors[1][2] + ", " + colors[2][2] + ")";
+		  chasercolor = "rgb(" + colors[0][3] + ", " + colors[1][3] + ", " + colors[2][3] + ")";
+		  textcolor = "rgb(" + colors[0][4] + ", " + colors[1][4] + ", " + colors[2][4] + ")";
+		  knockback = Math.random() * 2;
+		  playerspeed = Math.random() / 64;
+		  chaserspeed = Math.random() / 64;
+		  repulsion = Math.random() / 256;
+		  friction = 1 - 2 ** (-9 + Math.random() * 6);
+		  treasurespeed = Math.random() / 128;
+		  circleno = Math.floor(Math.random() * 32);
+		  chaserno = Math.floor(Math.random() * 16);
+	      }
+	      gen();
+	      gameloop();
+	  }
+		  
+	  function choice(array)
+	  {
+	      return array[Math.floor(Math.random() * array.length)];
+	  }
+	  
+	  function shuffle(array)
+	  {
+	      const oldarray = array.slice();
+	      const newarray = [];
+	      while (oldarray.length != 0)
+	      {
+		  const element = choice(oldarray);
+		  oldarray.splice(oldarray.indexOf(element), 1);
+		  newarray.push(element);
+	      }
+	      return newarray;
+	  }	  
+	  
+	      
+	  
+	  async function loss()
+	  {
+	      context.fillStyle = bgcolor;
+	      context.fillRect(0, 0, display.width, display.height);
+	      context.fillStyle = textcolor;
+	      let lines = [];
+	      lines.push("Death!");
+	      lines.push("Your score: " + score);
+	      lines.push("Press any key to play again.");
+	      for (let i = 0; i < lines.length; i++)
+	      {
+		  context.fillText(lines[i], display.width / 64, display.width / 64 + display.height / 16 * i);
+	      }
+	      await keydown();
+	      start();
+	  }
+
+	  function pturn()
+	  {
+	      if (keys.has("ArrowLeft"))
+	      {
+		  pangle -= Math.PI / 32;
+	      }
+	      if (keys.has("ArrowRight"))
+	      {
+		  pangle += Math.PI / 32;
+	      }
+	      if (keys.has("ArrowUp"))
+	      {
+		  player.vel[0] += Math.cos(pangle) * playerspeed;
+		  player.vel[1] += Math.sin(pangle) * playerspeed;
+	      }
+	      if (keys.has(" "))
+	      {
+		  player.vel[0] *= 0.875;
+		  player.vel[1] *= 0.875;
+	      }
+	      if (keys.has("r"))
+	      {
+		  player.alive = false;
+	      }
+	      player.physics();
+	  }
+
+	  function cturn()
+	  {
+	      for (const chaser of chasers)
+	      {
+		  const pdist = Math.abs(player.point[0] - chaser.point[0]) + Math.abs(player.point[1] - chaser.point[1]);
+		  chaser.vel[0] += (player.point[0] - chaser.point[0]) / pdist * chaserspeed;
+		  chaser.vel[1] += (player.point[1] - chaser.point[1]) / pdist * chaserspeed;
+		  for (const ochaser of chasers)
+		  {
+		      if (ochaser.point[0] - chaser.point[0] != 0 || ochaser.point[1] - chaser.point[1] != 0)
+		      {
+			  const cdist = Math.abs(ochaser.point[0] - chaser.point[0]) + Math.abs(ochaser.point[1] - chaser.point[1]);
+			  chaser.vel[0] -= (ochaser.point[0] - chaser.point[0]) / cdist * repulsion;
+			  chaser.vel[1] -= (ochaser.point[1] - chaser.point[1]) / cdist * repulsion;
+		      }
+		  }
+		  chaser.physics();
+	      }
+	  }
+
+	  function tturn()
+	  {
+	      const pdist = Math.abs(player.point[0] - treasure.point[0]) + Math.abs(player.point[1] - treasure.point[1]);
+	      treasure.vel[0] -= (player.point[0] - treasure.point[0]) / pdist * treasurespeed;
+	      treasure.vel[1] -= (player.point[1] - treasure.point[1]) / pdist * treasurespeed;
+	      treasure.physics();
+	  }
+	  
+	  function gameloop()
+	  {
+	      show();
+	      pturn();
+	      cturn();
+	      if (!player.alive)
+	      {
+		  loss();
+		  return;
+	      }
+	      requestAnimationFrame(gameloop);
+	  }
+
+	  start();
+      }
+      main();
+    </script>
+  </body>
+</html>
